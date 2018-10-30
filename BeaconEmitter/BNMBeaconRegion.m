@@ -23,41 +23,40 @@
 
 #import "BNMBeaconRegion.h"
 
-
-
 @implementation BNMBeaconRegion
 
-- (id)initWithProximityUUID:(NSUUID *)proximityUUID major:(BNMBeaconMajorValue)major minor:(BNMBeaconMinorValue)minor identifier:(NSString *)identifier {
-    self = [super init];
-    if (self) {
-        self.proximityUUID = proximityUUID;
-        _major = [NSNumber numberWithUnsignedShort:major];
-        _minor = [NSNumber numberWithUnsignedShort:minor];
-    }
-    return self;
+- (id)initWithProximityUUID:(NSUUID *)proximityUUID major:(NSNumber *)major minor:(NSNumber *)minor identifier:(NSString *)identifier {
+  self = [super init];
+  if (self) {
+    self.proximityUUID = proximityUUID;
+    _major = major;
+    _minor = minor;
+    _identifier = identifier;
+  }
+  return self;
 }
 
 - (NSMutableDictionary *)peripheralDataWithMeasuredPower:(NSNumber *)measuredPower {
-    NSString *beaconKey = @"kCBAdvDataAppleBeaconKey";
-    unsigned char advBytes[21] = {0};
-    
-    if (!measuredPower) {
-        measuredPower = @-59;
-    }
-    
-    [self.proximityUUID getUUIDBytes:(unsigned char *)&advBytes];
-    
-    advBytes[16] = (unsigned char)(self.major.shortValue >> 8);
-    advBytes[17] = (unsigned char)(self.major.shortValue & 255);
-    
-    advBytes[18] = (unsigned char)(self.minor.shortValue >> 8);
-    advBytes[19] = (unsigned char)(self.minor.shortValue & 255);
-    
-    advBytes[20] = measuredPower.shortValue;
-    
-    NSMutableData *AdvData = [NSMutableData dataWithBytes:advBytes length:21];
-    NSLog(@"%@",AdvData);
-    return [@{beaconKey:AdvData} mutableCopy];
+  NSString *beaconKey = @"kCBAdvDataAppleBeaconKey";
+  unsigned char advBytes[21] = {0};
+
+  if (!measuredPower) {
+    measuredPower = @-59;
+  }
+
+  [self.proximityUUID getUUIDBytes:(unsigned char *)&advBytes];
+
+  advBytes[16] = (unsigned char)(self.major.shortValue >> 8);
+  advBytes[17] = (unsigned char)(self.major.shortValue & 255);
+
+  advBytes[18] = (unsigned char)(self.minor.shortValue >> 8);
+  advBytes[19] = (unsigned char)(self.minor.shortValue & 255);
+
+  advBytes[20] = measuredPower.shortValue;
+
+  NSMutableData *AdvData = [NSMutableData dataWithBytes:advBytes length:21];
+  NSLog(@"%@",AdvData);
+  return [@{beaconKey:AdvData} mutableCopy];
 }
 
 @end

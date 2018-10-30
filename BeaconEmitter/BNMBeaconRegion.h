@@ -23,17 +23,19 @@
 
 #import <Foundation/Foundation.h>
 
-typedef uint16_t BNMBeaconMajorValue;
-typedef uint16_t BNMBeaconMinorValue;
+//NS_ASSUME_NONNULL_BEGIN
 
 @interface BNMBeaconRegion : NSObject
 
 @property (strong, nonatomic) NSUUID *proximityUUID;
 @property (readonly, nonatomic) NSNumber *major;
 @property (readonly, nonatomic) NSNumber *minor;
+@property (readonly, nonatomic) NSString *identifier;
 
 
-- (id)initWithProximityUUID:(NSUUID *)proximityUUID major:(BNMBeaconMajorValue)major minor:(BNMBeaconMinorValue)minor identifier:(NSString *)identifier;
+- (id)initWithProximityUUID:(NSUUID *)proximityUUID major:(NSNumber *)major minor:(NSNumber *)minor identifier:(NSString *)identifier;
 - (NSMutableDictionary *)peripheralDataWithMeasuredPower:(NSNumber *)measuredPower;
 
 @end
+
+//NS_ASSUME_NONNULL_END
