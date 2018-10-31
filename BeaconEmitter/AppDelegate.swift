@@ -23,6 +23,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
   var manager: CBPeripheralManager!
   var beacons: [BNMBeaconRegion] = []
+  var currentBeacon: BNMBeaconRegion? {
+    didSet {
+      beaconChanged()
+    }
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     manager = CBPeripheralManager(delegate: self, queue: nil)
@@ -31,24 +36,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     beaconsTableView.dataSource = self
     beaconsTableView.delegate = self
     beaconsTableView.reloadData()
+    if manager.isAdvertising {
+      startBeaconButton.title = "Turn iBeacon off"
+    } else {
+      startBeaconButton.title = "Turn iBeacon on"
+    }
+  }
+
+  private func beaconChanged() {
+    switch (manager.isAdvertising, currentBeacon) {
+    case (true, .some(let beacon)):
+      manager.stopAdvertising()
+      startBeaconButton.title = "Turn iBeacon on"
+      let measuredPower = getMeasuredPower()
+      DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + DispatchTimeInterval.seconds(1)) {
+        self.manager.startAdvertising(beacon.peripheralData(withMeasuredPower: measuredPower) as! [String: Any])
+      }
+    case (false, .some(let beacon)):
+      manager.startAdvertising(beacon.peripheralData(withMeasuredPower: getMeasuredPower()) as! [String: Any])
+      startBeaconButton.title = "Turn iBeacon off"
+    case (true, .none):
+      manager.stopAdvertising()
+      startBeaconButton.title = "Turn iBeacon on"
+    case (false, .none):
+      manager.stopAdvertising()
+      startBeaconButton.title = "Turn iBeacon on"
+    }
   }
 
   // MARK: - Actions
 
+  func getMeasuredPower() -> NSNumber? {
+    if power.intValue != 0 {
+      return NSNumber(value: power.intValue)
+    } else {
+      return nil
+    }
+  }
+
   @IBAction func changeBeaconState(_ sender: NSButton) {
     if manager.isAdvertising {
-      manager.stopAdvertising()
-      sender.title = "Turn iBeacon on"
+      currentBeacon = nil
     } else {
-      let measuredPower: NSNumber?
-      if power.intValue != 0 {
-        measuredPower = NSNumber(value: power.intValue)
-      } else {
-        measuredPower = nil
-      }
-      if let beacon = createBeaconFromInput(), let data = beacon.peripheralData(withMeasuredPower: measuredPower) as? [String: Any] {
-          manager.startAdvertising(data)
-          sender.title = "Turn iBeacon off"
+      if let beacon = createBeaconFromInput() {
+        currentBeacon = beacon
       } else {
         let alert = NSAlert()
         alert.messageText = "Error"
@@ -58,24 +89,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         alert.runModal()
       }
-    }
-  }
-
-  @IBAction func handleClickRefreshButton(_ sender: NSButton) {
-    if manager.isAdvertising {
-      manager.stopAdvertising()
-      startBeaconButton.title = "Turn iBeacon off"
-    }
-
-    let proximityUUID = NSUUID.init()
-    uuid.stringValue = proximityUUID.uuidString
-  }
-
-  @IBAction func handleClickCopyButton(_ sender: NSButton) {
-    if let copyValue = uuid.stringValue as? NSString {
-      let pasteboard = NSPasteboard.general
-      pasteboard.clearContents()
-      pasteboard.writeObjects([copyValue])
     }
   }
 
@@ -95,8 +108,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
   private func setInputsFromBeacon(beaconRegion: BNMBeaconRegion) {
     uuid.stringValue = beaconRegion.proximityUUID.uuidString
     identifier.stringValue = beaconRegion.identifier
-    major.intValue = beaconRegion.major.int32Value
-    minor.intValue = beaconRegion.minor.int32Value
+    major.stringValue = NumberFormatter.localizedString(from: beaconRegion.major, number: .none)
+    minor.stringValue = NumberFormatter.localizedString(from: beaconRegion.minor, number: .none)
   }
 }
 
@@ -123,10 +136,22 @@ extension AppDelegate: CBPeripheralManagerDelegate {
       startBeaconButton.isEnabled = true
     }
   }
+
+  func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
+    if let error = error {
+      let alert = NSAlert(error: error)
+      alert.runModal()
+    } else {
+      startBeaconButton.title = "Turn iBeacon off"
+    }
+  }
 }
 
 extension AppDelegate: NSTableViewDataSource, NSTableViewDelegate {
   private struct CellIdentifier {
+    static let title = "titleCell"
+    static let major = "majorCell"
+    static let minor = "minorCell"
     static let uuid = "uuidCell"
   }
 
@@ -140,6 +165,15 @@ extension AppDelegate: NSTableViewDataSource, NSTableViewDelegate {
     let text: String
 
     if tableColumn == tableView.tableColumns[0] {
+      text = beacon.identifier
+      cellIdentifier = CellIdentifier.title
+    } else if tableColumn == tableView.tableColumns[1] {
+        text = NumberFormatter.localizedString(from: beacon.major, number: .none)
+        cellIdentifier = CellIdentifier.major
+    } else if tableColumn == tableView.tableColumns[2] {
+      text = NumberFormatter.localizedString(from: beacon.minor, number: .none)
+      cellIdentifier = CellIdentifier.minor
+    } else if tableColumn == tableView.tableColumns[3] {
       text = beacon.proximityUUID.uuidString
       cellIdentifier = CellIdentifier.uuid
     } else {
@@ -152,18 +186,19 @@ extension AppDelegate: NSTableViewDataSource, NSTableViewDelegate {
     return cell
   }
 
+  func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+    let beacons: NSArray = self.beacons as NSArray
+    if let x = beacons.sortedArray(using: tableView.sortDescriptors) as? [BNMBeaconRegion] {
+      self.beacons = x
+      tableView.reloadData()
+    }
+  }
+
   func tableViewSelectionDidChange(_ notification: Notification) {
     guard let beacon = beacons[safe: beaconsTableView.selectedRow] else { return }
     print(beacon.proximityUUID.uuidString)
     setInputsFromBeacon(beaconRegion: beacon)
-    manager.stopAdvertising()
-    let measuredPower: NSNumber?
-    if power.intValue != 0 {
-      measuredPower = NSNumber(value: power.intValue)
-    } else {
-      measuredPower = nil
-    }
-    manager.startAdvertising(beacon.peripheralData(withMeasuredPower: measuredPower) as? [String: Any])
+    currentBeacon = beacon
   }
 }
 
